@@ -73,6 +73,7 @@ LLMs are unreliable at producing valid unified diffs — line numbers drift, con
 
 * **Interactive TUI:** fast, keyboard-driven file selection with directory expand/collapse and live size stats.
 * **LLM-optimized output:** line-numbered content with `--- a/path` headers the patcher can target.
+* **File metadata:** each export block carries a `# meta:` line with size, line count, and modified/created dates (`--no-meta` to omit).
 * **Smart filtering:** ignores `node_modules`, `.git`, build artifacts, and friends by default (`--no-ignore` to disable).
 * **Re-export:** `--update` replays your last selection from the saved manifest.
 * **Multi-file export:** `--multi` writes one file per selection — useful for RAG pipelines.
