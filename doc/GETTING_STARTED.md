@@ -44,7 +44,20 @@ xtrshow --max-depth 2       # limit recursion depth
 xtrshow --clean             # omit line numbers (raw content)
 xtrshow -o context.md       # write to a file instead of stdout
 xtrshow --no-ignore         # show ignored dirs (.git, node_modules, ...)
+xtrshow --no-meta           # omit the per-file metadata line
 ```
+
+### File Metadata
+
+Each exported file block includes a `# meta:` line under its header with the file's size, line count, and modification date (plus creation date on platforms that track it — macOS and Windows; Linux doesn't expose true creation time):
+
+```
+--- a/src/main.py
++++ b/src/main.py
+# meta: 4.2 KB | 128 lines | modified 2026-08-26T10:32:11-04:00
+```
+
+This gives the LLM a sense of which files are freshest without costing more than a line of context. Pass `--no-meta` to omit it. The line starts with `#`, so it's inert if it ever ends up inside a patch file.
 
 ### Re-Exporting (`--update`)
 

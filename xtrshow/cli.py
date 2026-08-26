@@ -21,6 +21,8 @@ options:
   --no-ignore           Show all files (disable default ignore patterns)
   -o OUTFILE, --outfile OUTFILE
                         Print output to file
+  --no-meta             Omit the per-file '# meta:' line (size, line count,
+                        modified/created dates)
 ---
 
 Copyright [2026] [michael@aloecraft.org]
@@ -47,6 +49,7 @@ import curses
 import os
 import sys
 import argparse
+from datetime import datetime
 from pathlib import Path
 
 from xtrshow import get_version
@@ -113,6 +116,60 @@ class FileNode:
             return self.path.stat().st_size
         except Exception:
             return 0
+
+
+def format_size(total_size):
+    """Format a byte count as a human-readable string"""
+    if total_size < 1024:
+        return f"{total_size} B"
+    elif total_size < 1024 * 1024:
+        return f"{total_size / 1024:.1f} KB"
+    elif total_size < 1024 * 1024 * 1024:
+        return f"{total_size / (1024 * 1024):.1f} MB"
+    else:
+        return f"{total_size / (1024 * 1024 * 1024):.1f} GB"
+
+
+def _format_timestamp(ts):
+    return datetime.fromtimestamp(ts).astimezone().isoformat(timespec="seconds")
+
+
+def _creation_timestamp(st):
+    """Best-effort file creation time, or None where the OS doesn't track it.
+
+    st_birthtime exists on macOS and the BSDs; on Windows st_ctime is the
+    creation time. On Linux st_ctime is inode-change time, not creation,
+    so we return None rather than mislead.
+    """
+    birthtime = getattr(st, "st_birthtime", None)
+    if birthtime is not None:
+        return birthtime
+    if sys.platform.startswith("win"):
+        return st.st_ctime
+    return None
+
+
+def format_file_meta(path, line_count):
+    """Build the '# meta:' comment line for an exported file block.
+
+    Starts with '#' so xtrpatch's parser treats it as noise if it ever
+    round-trips through a patch file.
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+
+    parts = [
+        format_size(st.st_size),
+        f"{line_count} lines",
+        f"modified {_format_timestamp(st.st_mtime)}",
+    ]
+    created = _creation_timestamp(st)
+    if created is not None:
+        parts.append(f"created {_format_timestamp(created)}")
+
+    return "# meta: " + " | ".join(parts)
 
 
 def should_ignore(path, ignore_patterns):
@@ -208,17 +265,7 @@ def get_selection_stats(root_node):
 
     total_size = sum(n.get_size() for n in selected_files)
 
-    # Format size nicely
-    if total_size < 1024:
-        size_str = f"{total_size} B"
-    elif total_size < 1024 * 1024:
-        size_str = f"{total_size / 1024:.1f} KB"
-    elif total_size < 1024 * 1024 * 1024:
-        size_str = f"{total_size / (1024 * 1024):.1f} MB"
-    else:
-        size_str = f"{total_size / (1024 * 1024 * 1024):.1f} GB"
-
-    return len(selected_files), size_str
+    return len(selected_files), format_size(total_size)
 
 
 def show_confirmation(stdscr, selected_count, size_str):
@@ -437,6 +484,11 @@ def main():
         action="store_true",
         help="Print the LLM prompting instructions and exit",
     )
+    parser.add_argument(
+        "--no-meta",
+        action="store_true",
+        help="Omit the per-file '# meta:' line (size, line count, modified/created dates)",
+    )
 
     args = parser.parse_args()
 
@@ -516,8 +568,9 @@ def main():
                         root_ext = os.path.splitext(path)
                         file_extension = root_ext[1]
 
+                        lines = content.splitlines()
+
                         if not args.clean:
-                            lines = content.splitlines()
                             max_ln_width = len(str(len(lines)))
                             formatted_content = "\n".join(
                                 f"{i + 1:>{max_ln_width}}:{line}"
@@ -526,13 +579,19 @@ def main():
                         else:
                             formatted_content = content
 
+                        meta_line = ""
+                        if not args.no_meta:
+                            meta = format_file_meta(path, len(lines))
+                            if meta:
+                                meta_line = meta + "\n"
+
                         # We construct the block using concatenation to avoid confusing LLM parsers
                         # when this file is pasted into prompts.
                         code_fence = "```"
                         block = f"""
 --- a/{path}
 +++ b/{path}
-{code_fence} {file_extension[1:] if file_extension.startswith(".") else file_extension}
+{meta_line}{code_fence} {file_extension[1:] if file_extension.startswith(".") else file_extension}
 {formatted_content}
 {code_fence}
 """
