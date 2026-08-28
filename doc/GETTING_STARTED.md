@@ -45,19 +45,28 @@ xtrshow --clean             # omit line numbers (raw content)
 xtrshow -o context.md       # write to a file instead of stdout
 xtrshow --no-ignore         # show ignored dirs (.git, node_modules, ...)
 xtrshow --no-meta           # omit the per-file metadata line
+xtrshow --no-hash           # keep the metadata line, drop the sha256 digest
 ```
 
 ### File Metadata
 
-Each exported file block includes a `# meta:` line under its header with the file's size, line count, and modification date (plus creation date on platforms that track it — macOS and Windows; Linux doesn't expose true creation time):
+Each exported file block includes a `# meta:` line under its header with the file's size, line count, modification date (plus creation date on platforms that track it — macOS and Windows; Linux doesn't expose true creation time), and a SHA-256 digest:
 
 ```
 --- a/src/main.py
 +++ b/src/main.py
-# meta: 4.2 KB | 128 lines | modified 2026-08-26T10:32:11-04:00
+# meta: 4.2 KB | 128 lines | modified 2026-08-26T10:32:11-04:00 | sha256 9f2b...c41e
 ```
 
 This gives the LLM a sense of which files are freshest without costing more than a line of context. Pass `--no-meta` to omit it. The line starts with `#`, so it's inert if it ever ends up inside a patch file.
+
+The digest is over the file's **raw bytes on disk**, not the line-numbered, newline-normalized text inside the fence. That means it matches `sha256sum src/main.py` and the checksums `xtrpatch` records under `.xtrpatch/`, so you can verify a paste by hand:
+
+```bash
+sha256sum src/main.py    # compare against the digest in the meta line
+```
+
+Its main job is identity, not integrity: re-export the same files after a round of edits and the model can compare digests to see which ones actually changed. Pass `--no-hash` to drop the digest while keeping the rest of the line.
 
 ### Re-Exporting (`--update`)
 
