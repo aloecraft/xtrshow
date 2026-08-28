@@ -22,7 +22,8 @@ options:
   -o OUTFILE, --outfile OUTFILE
                         Print output to file
   --no-meta             Omit the per-file '# meta:' line (size, line count,
-                        modified/created dates)
+                        modified/created dates, sha256)
+  --no-hash             Omit only the sha256 digest from the '# meta:' line
 ---
 
 Copyright [2026] [michael@aloecraft.org]
@@ -46,6 +47,7 @@ under the License.
 """
 
 import curses
+import hashlib
 import os
 import sys
 import argparse
@@ -149,7 +151,24 @@ def _creation_timestamp(st):
     return None
 
 
-def format_file_meta(path, line_count):
+def compute_sha256(path):
+    """SHA256 of the file's raw bytes, or None if it can't be read.
+
+    Deliberately hashes what is on disk rather than the CRLF-normalized,
+    line-numbered text in the export block, so the digest matches both
+    `sha256sum <file>` and the checksums xtrpatch records under .xtrpatch/.
+    """
+    digest = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                digest.update(chunk)
+    except OSError:
+        return None
+    return digest.hexdigest()
+
+
+def format_file_meta(path, line_count, include_hash=True):
     """Build the '# meta:' comment line for an exported file block.
 
     Starts with '#' so xtrpatch's parser treats it as noise if it ever
@@ -168,6 +187,10 @@ def format_file_meta(path, line_count):
     created = _creation_timestamp(st)
     if created is not None:
         parts.append(f"created {_format_timestamp(created)}")
+    if include_hash:
+        digest = compute_sha256(path)
+        if digest is not None:
+            parts.append(f"sha256 {digest}")
 
     return "# meta: " + " | ".join(parts)
 
@@ -487,7 +510,12 @@ def main():
     parser.add_argument(
         "--no-meta",
         action="store_true",
-        help="Omit the per-file '# meta:' line (size, line count, modified/created dates)",
+        help="Omit the per-file '# meta:' line (size, line count, modified/created dates, sha256)",
+    )
+    parser.add_argument(
+        "--no-hash",
+        action="store_true",
+        help="Omit only the sha256 digest from the '# meta:' line",
     )
 
     args = parser.parse_args()
@@ -581,7 +609,9 @@ def main():
 
                         meta_line = ""
                         if not args.no_meta:
-                            meta = format_file_meta(path, len(lines))
+                            meta = format_file_meta(
+                                path, len(lines), include_hash=not args.no_hash
+                            )
                             if meta:
                                 meta_line = meta + "\n"
 
