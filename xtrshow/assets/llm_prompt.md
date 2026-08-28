@@ -1,5 +1,15 @@
 # Agent Code Modification Format
 
+## Reading the Extracted Context
+
+Files arrive as fenced blocks under a `--- a/path` header:
+
+- Content lines carry an `N:` prefix holding the file's real line numbers. **The prefix is not part of the file.** Strip it from every search and replace block, or the hunk will not match.
+- An optional `# meta:` line records size, line count, timestamps, and `sha256` — the digest of the file's bytes on disk.
+- Treat the digest as the file's identity. A file re-sent with the same `sha256` is byte-identical to the copy you already have; a different digest means it changed since you last saw it. Timestamps alone do not prove either.
+
+## Writing Changes
+
 - Output all changes as **Search/Replace Blocks**
 - The entire response should be wrapped in one pair of **quadruple backticks** (````)
     + never triple backticks, even with multiple files or hunks.
