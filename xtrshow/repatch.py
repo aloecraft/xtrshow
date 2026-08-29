@@ -5,6 +5,7 @@
 import sys
 import re
 import argparse
+import difflib
 import os
 import shutil
 from pathlib import Path
@@ -20,9 +21,51 @@ from xtrshow import (
 ABS_BACKUP_PREFIX = "_abs"
 
 
+# One definition of a hunk opener, shared by the parser and the drift check.
+HUNK_OPENER_RE = re.compile(r"^(?:<<<<|<<)\s*(\d+)?(?:[:~](\d+))?\s*$")
+
+
 def normalize(line):
     """Normalize line for comparison (strip whitespace)."""
     return line.strip()
+
+
+def _is_file_header(line):
+    """True for the '--- a/path' family of section headers."""
+    return (
+        line.startswith("--- ") or line.startswith("+++ ") or line.startswith("File: ")
+    )
+
+
+def _opens_new_hunk(lines, idx):
+    """True if lines[idx] is a file header that structurally begins another hunk.
+
+    Guarded by a lookahead rather than matching any header-shaped line, because
+    replacement text legitimately contains them -- xtrshow's own export format
+    emits '--- a/path', so patching a file that documents the format would
+    otherwise break. Only a header followed (past blanks and annotations) by a
+    hunk opener counts as structure.
+    """
+    if not _is_file_header(lines[idx]):
+        return False
+    j = idx + 1
+    while j < len(lines):
+        stripped = lines[j].strip()
+        if not stripped or stripped.startswith("@") or _is_file_header(lines[j]):
+            j += 1
+            continue
+        return HUNK_OPENER_RE.match(stripped) is not None
+    return False
+
+
+def count_hunk_openers(content):
+    """How many hunks the patch text *claims*, counted independently of parsing.
+
+    The backstop for the drift check: if the parser produces fewer hunks than
+    there are openers, something was swallowed and the caller can say so
+    instead of leaving the difference invisible.
+    """
+    return sum(1 for line in content.splitlines() if HUNK_OPENER_RE.match(line.strip()))
 
 
 def _parse_wildcard(line):
@@ -137,6 +180,90 @@ def _match_wildcard(file_lines, file_idx, next_seg_lines, max_skip, exact):
             content_skipped += 1
         pos += 1
     return None
+
+
+def _difference_kind(a, b):
+    """Name the way two normalized lines differ, when it is a familiar one."""
+    if a.split() == b.split():
+        return "interior whitespace differs"
+    if a.lower() == b.lower():
+        return "capitalization differs"
+    if a.replace('"', "'") == b.replace('"', "'"):
+        return "quote style differs"
+    return None
+
+
+def _trim(text, width=58):
+    text = text.strip()
+    return text if len(text) <= width else text[: width - 1] + "…"
+
+
+def explain_match_failure(file_lines, search_lines):
+    """Say why a search block did not match, in terms the writer can act on.
+
+    'Block Not Found' is a dead end: it does not distinguish a line that is
+    absent from one that is present but differs by a space. Runs only after a
+    match has already failed, so it never costs anything on the success path.
+    """
+    norm_search = [normalize(l) for l in search_lines if normalize(l)]
+    if not norm_search:
+        return None
+
+    norm_file = [normalize(l) for l in file_lines]
+    anchor = norm_search[0]
+    anchor_hits = [n for n, line in enumerate(norm_file, 1) if line == anchor]
+
+    if anchor_hits:
+        # The block started matching and then diverged. Naming the line it
+        # diverged on is far more useful than naming the block.
+        best = None
+        for start in anchor_hits:
+            file_idx = start - 1
+            for depth, want in enumerate(norm_search):
+                while file_idx < len(norm_file) and not norm_file[file_idx]:
+                    file_idx += 1
+                if file_idx >= len(norm_file) or norm_file[file_idx] != want:
+                    break
+                file_idx += 1
+            else:
+                continue
+            if best is None or depth > best[0]:
+                got = norm_file[file_idx] if file_idx < len(norm_file) else ""
+                best = (depth, start, file_idx + 1, want, got)
+
+        if best is not None:
+            depth, start, file_line, want, got = best
+            if not got:
+                return (
+                    f"matched from line {start} but ran past end of file at "
+                    f"search line {depth + 1}"
+                )
+            kind = _difference_kind(want, got)
+            because = f" ({kind})" if kind else ""
+            return (
+                f"matched from line {start}, diverged at search line "
+                f"{depth + 1}: expected '{_trim(want)}', file line {file_line} "
+                f"has '{_trim(got)}'{because}"
+            )
+
+    # The anchor itself is absent: point at whatever came closest.
+    best_ratio, best_n, best_line = 0.0, None, None
+    for n, line in enumerate(norm_file, 1):
+        if not line:
+            continue
+        ratio = difflib.SequenceMatcher(None, anchor, line).ratio()
+        if ratio > best_ratio:
+            best_ratio, best_n, best_line = ratio, n, line
+
+    if best_n is None or best_ratio < 0.6:
+        return f"no line resembles '{_trim(anchor)}'"
+
+    kind = _difference_kind(anchor, best_line)
+    because = f" ({kind})" if kind else f" ({best_ratio:.0%} similar)"
+    return (
+        f"no match for '{_trim(anchor)}'; closest is line {best_n} "
+        f"'{_trim(best_line)}'{because}"
+    )
 
 
 def find_match(file_lines, search_lines, start_hint=None):
@@ -306,7 +433,7 @@ def parse_multi_file_patch(content, default_target=None):
         # Support ':' or '~' for range hints (e.g., 10:15 or 10~15)
         # ALLOW '<<' (2 brackets) as a start marker, but ONLY if the line ends immediately
         # after the hint. This prevents matching C++ streams or bitwise shifts like '<< 5;'.
-        block_match = re.match(r"^(?:<<<<|<<)\s*(\d+)?(?:[:~](\d+))?\s*$", stripped)
+        block_match = HUNK_OPENER_RE.match(stripped)
 
         if block_match:
             block_start_line = i + 1
@@ -316,48 +443,80 @@ def parse_multi_file_patch(content, default_target=None):
                 continue
 
             hint_start = int(block_match.group(1)) if block_match.group(1) else None
+            annotation = current_annotation
+            current_annotation = None
+
+            def record_malformed(reason):
+                """Keep an unclosable hunk as evidence instead of dropping it.
+
+                Silently discarding it is what let one missing '>>>>' swallow
+                the hunk after it without a trace.
+                """
+                changes.setdefault(current_file, []).append(
+                    {
+                        "patch_line": block_start_line,
+                        "hint": None,
+                        "search": [],
+                        "replace": [],
+                        "tail": [],
+                        "annotation": annotation,
+                        "malformed": reason,
+                    }
+                )
 
             i += 1
             search_lines = []
-            while i < len(lines) and lines[i].strip() != "====":
+            while (
+                i < len(lines)
+                and lines[i].strip() != "===="
+                and not _opens_new_hunk(lines, i)
+            ):
                 search_lines.append(lines[i])
                 i += 1
 
-            if i < len(lines) and lines[i].strip() == "====":
-                i += 1
-                replace_lines = []
-                tail_lines = []
+            if i >= len(lines) or lines[i].strip() != "====":
+                # Deliberately does not advance past the header: the outer loop
+                # reparses it, so the hunk that follows survives this one.
+                record_malformed("missing ==== separator")
+                continue
 
-                # Consume Replace Block (until >>>> OR second ====)
-                while i < len(lines):
-                    s = lines[i].strip()
-                    if s == ">>>>" or s == "====":
-                        break
-                    replace_lines.append(lines[i])
+            i += 1
+            replace_lines = []
+            tail_lines = []
+
+            # Consume Replace Block (until >>>> OR second ====)
+            while i < len(lines):
+                s = lines[i].strip()
+                if s == ">>>>" or s == "====" or _opens_new_hunk(lines, i):
+                    break
+                replace_lines.append(lines[i])
+                i += 1
+
+            # Check for Tail Context (second ====)
+            if i < len(lines) and lines[i].strip() == "====":
+                i += 1  # skip second ====
+                while (
+                    i < len(lines)
+                    and lines[i].strip() != ">>>>"
+                    and not _opens_new_hunk(lines, i)
+                ):
+                    tail_lines.append(lines[i])
                     i += 1
 
-                # Check for Tail Context (second ====)
-                if i < len(lines) and lines[i].strip() == "====":
-                    i += 1  # skip second ====
-                    while i < len(lines) and lines[i].strip() != ">>>>":
-                        tail_lines.append(lines[i])
-                        i += 1
+            if i >= len(lines) or lines[i].strip() != ">>>>":
+                record_malformed("missing >>>> terminator")
+                continue
 
-                if i < len(lines) and lines[i].strip() == ">>>>":
-                    if current_file not in changes:
-                        changes[current_file] = []
-
-                    changes[current_file].append(
-                        {
-                            "patch_line": block_start_line,
-                            "hint": hint_start,
-                            "search": search_lines,
-                            "replace": replace_lines,
-                            "tail": tail_lines,
-                            "annotation": current_annotation,
-                        }
-                    )
-                    current_annotation = None  # Consumed
+            changes.setdefault(current_file, []).append(
+                {
+                    "patch_line": block_start_line,
+                    "hint": hint_start,
+                    "search": search_lines,
+                    "replace": replace_lines,
+                    "tail": tail_lines,
+                    "annotation": annotation,
+                }
+            )
             i += 1
             continue
 
@@ -784,6 +943,14 @@ def _process_hunks(file_lines, blocks):
     for i, block in enumerate(blocks, 1):
         hunk_res = {"id": i, "annotation": block.get("annotation", "")}
 
+        if block.get("malformed"):
+            error_occurred = True
+            hunk_res["status"] = "MALFORMED"
+            hunk_res["detail"] = block["malformed"]
+            hunk_res["patch_line"] = block.get("patch_line")
+            hunk_stats.append(hunk_res)
+            continue
+
         if i in conflicts:
             error_occurred = True
             hunk_res["status"] = "CONFLICT"
@@ -858,6 +1025,9 @@ def _process_hunks(file_lines, blocks):
                 error_occurred = True
                 hunk_res["status"] = "FAILED"
                 hunk_res["hint"] = block["hint"]
+                hunk_res["diagnosis"] = explain_match_failure(
+                    file_lines, block["search"]
+                )
 
         hunk_stats.append(hunk_res)
 
@@ -868,7 +1038,9 @@ def _print_hunk_report(hunk_stats, file_delta_total, filepath, output_fn):
     """Print the per-file patch report."""
     successes = [h for h in hunk_stats if h["status"] == "APPLIED"]
     fails = [
-        h for h in hunk_stats if h["status"] in ("FAILED", "BLOCKED", "EMPTY_SEARCH")
+        h
+        for h in hunk_stats
+        if h["status"] in ("FAILED", "BLOCKED", "EMPTY_SEARCH", "MALFORMED")
     ]
 
     if not fails and successes:
@@ -900,11 +1072,72 @@ def _print_hunk_report(hunk_stats, file_delta_total, filepath, output_fn):
             line = f"   {h['id']}. ⚡ {desc:<32} [Overlaps Earlier Block]"
         elif h["status"] == "EMPTY_SEARCH":
             line = f"   {h['id']}. ❌ {desc:<32} [{h['detail']}]"
+        elif h["status"] == "MALFORMED":
+            at = f" at patch line {h['patch_line']}" if h.get("patch_line") else ""
+            line = f"   {h['id']}. 🧩 {desc:<32} [Unparseable: {h['detail']}{at}]"
         elif h["status"] == "FAILED":
             hint = f"~Line {h['hint']}" if h.get("hint") else "No Hint"
             line = f"   {h['id']}. ❌ {desc:<32} [Block Not Found] {hint}"
+            if h.get("diagnosis"):
+                line += f"\n      ↳ {h['diagnosis']}"
 
         output_fn(line)
+
+
+def report_hunk_drift(content, changes, output_fn=print):
+    """Warn when the parser produced fewer hunks than the patch text claims.
+
+    The backstop for anything the structural rules miss. A hunk that goes
+    missing is the one failure a writer cannot react to, because nothing in
+    the report refers to it -- so the count is checked independently of how
+    the parse actually went.
+    """
+    declared = count_hunk_openers(content)
+    parsed = sum(len(blocks) for blocks in changes.values())
+    if declared <= parsed:
+        return 0
+    missing = declared - parsed
+    output_fn(
+        f"  ⚠️  {missing} hunk(s) went missing: the patch opens {declared} "
+        f"but only {parsed} could be read. Check for an unterminated block."
+    )
+    return missing
+
+
+def check_changes(changes_dict, output_fn=print):
+    """Dry-run every hunk against the files on disk without writing anything.
+
+    Same matcher, same report, no backups and no edits: a model can find out
+    whether a patch will land before anything is modified, which is cheaper
+    than apply, discover a partial, revert, retry.
+    """
+    problems = 0
+    for filepath, blocks in changes_dict.items():
+        if not os.path.exists(filepath):
+            malformed = [b for b in blocks if b.get("malformed")]
+            creates = len(blocks) == 1 and not blocks[0]["search"] and not malformed
+            if creates:
+                output_fn(f"📄 {filepath:<40} ✅ WOULD CREATE")
+            else:
+                output_fn(f"📄 {filepath:<40} ❌ MISSING (cannot modify)")
+                problems += 1
+            continue
+
+        try:
+            with open(filepath, "r") as f:
+                file_lines = f.readlines()
+        except OSError as e:
+            output_fn(f"📄 {filepath:<40} ❌ UNREADABLE: {e}")
+            problems += 1
+            continue
+
+        # _process_hunks edits in place, so it runs against a throwaway copy.
+        error_occurred, delta, hunk_stats = _process_hunks(list(file_lines), blocks)
+        _print_hunk_report(hunk_stats, delta, filepath, output_fn)
+        if error_occurred:
+            problems += 1
+
+    return problems
 
 
 def apply_changes(changes_dict, patch_source_path=None):
@@ -916,45 +1149,65 @@ def apply_changes(changes_dict, patch_source_path=None):
             print(msg)
             log_buffer.append(str(msg))
 
-        # --- File Rewrite ---
-        # `! DELETE FILE` plus a create block on one path. Both hunks land in
-        # the same list, so without this they would fall through to the
-        # modification path and fail as two searchless searches.
-        if (
-            len(blocks) == 2
-            and _is_whole_file_delete(blocks[0])
-            and _is_whole_file_create(blocks[1])
-        ):
-            _apply_file_rewrite(filepath, blocks, patch_source_path, output, log_buffer)
-            continue
+        # Every whole-file operation below is inferred from an empty search
+        # block -- and an unparseable hunk leaves empty search AND empty
+        # replace behind, which is exactly the delete signature. A patch
+        # truncated mid-hunk is the ordinary result of a model running out of
+        # tokens, and must never be read as "delete this file", so these paths
+        # require the whole file's hunks to have parsed cleanly.
+        malformed = [b for b in blocks if b.get("malformed")]
 
-        # --- File Deletion ---
-        if os.path.exists(filepath):
+        if not malformed:
+            # --- File Rewrite ---
+            # `! DELETE FILE` plus a create block on one path. Both hunks land
+            # in the same list, so without this they would fall through to the
+            # modification path and fail as two searchless searches.
             if (
-                len(blocks) == 1
-                and not blocks[0]["search"]
-                and not blocks[0]["replace"]
+                len(blocks) == 2
+                and _is_whole_file_delete(blocks[0])
+                and _is_whole_file_create(blocks[1])
             ):
-                _apply_file_deletion(filepath, patch_source_path, output, log_buffer)
-                continue
-
-        # --- File Creation ---
-        if not os.path.exists(filepath):
-            if (
-                len(blocks) == 1
-                and not blocks[0]["search"]
-                and not blocks[0]["replace"]
-            ):
-                output(f"⏭️  {filepath} ... ALREADY ABSENT (nothing to delete)")
-                continue
-            if len(blocks) == 1 and not blocks[0]["search"]:
-                _apply_file_creation(
+                _apply_file_rewrite(
                     filepath, blocks, patch_source_path, output, log_buffer
                 )
                 continue
-            else:
-                output(f"❌ {filepath} ... NOT FOUND (Cannot modify missing file)")
-                continue
+
+            # --- File Deletion ---
+            if os.path.exists(filepath):
+                if (
+                    len(blocks) == 1
+                    and not blocks[0]["search"]
+                    and not blocks[0]["replace"]
+                ):
+                    _apply_file_deletion(
+                        filepath, patch_source_path, output, log_buffer
+                    )
+                    continue
+
+            # --- File Creation ---
+            if not os.path.exists(filepath):
+                if (
+                    len(blocks) == 1
+                    and not blocks[0]["search"]
+                    and not blocks[0]["replace"]
+                ):
+                    output(f"⏭️  {filepath} ... ALREADY ABSENT (nothing to delete)")
+                    continue
+                if len(blocks) == 1 and not blocks[0]["search"]:
+                    _apply_file_creation(
+                        filepath, blocks, patch_source_path, output, log_buffer
+                    )
+                    continue
+                else:
+                    output(f"❌ {filepath} ... NOT FOUND (Cannot modify missing file)")
+                    continue
+
+        if not os.path.exists(filepath):
+            # Only reachable with unparseable hunks in hand: report them rather
+            # than guessing at an intent the patch never managed to express.
+            _, _, hunk_stats = _process_hunks([], blocks)
+            _print_hunk_report(hunk_stats, 0, filepath, output)
+            continue
 
         # --- Modification ---
         _verify_checksum(filepath)
@@ -980,7 +1233,8 @@ def apply_changes(changes_dict, patch_source_path=None):
         save_log_file("\n".join(log_buffer), filepath, version)
 
         error_occurred = any(
-            h["status"] in ("FAILED", "BLOCKED", "CONFLICT", "EMPTY_SEARCH")
+            h["status"]
+            in ("FAILED", "BLOCKED", "CONFLICT", "EMPTY_SEARCH", "MALFORMED")
             for h in hunk_stats
         )
         if error_occurred:
@@ -1004,6 +1258,11 @@ def main():
 
     parser.add_argument(
         "--revert", action="store_true", help="Revert file(s) to latest backup"
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Dry run: report what the patch would do, without touching any file",
     )
     parser.add_argument(
         "args", nargs="*", help="File to revert, or Patch file to apply"
@@ -1062,6 +1321,16 @@ def main():
     if not changes:
         print("No valid blocks found in patch file.")
         sys.exit(1)
+
+    missing = report_hunk_drift(content, changes)
+
+    if args.check:
+        problems = check_changes(changes)
+        total = sum(len(b) for b in changes.values())
+        print(
+            f"\nChecked {total} hunk(s) across {len(changes)} file(s). Nothing written."
+        )
+        sys.exit(1 if (problems or missing) else 0)
 
     apply_changes(changes, patch_source_path=patch_path)
 

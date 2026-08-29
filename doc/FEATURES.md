@@ -38,6 +38,9 @@
 * **Line Hints:** Supports `<<<< START~END` syntax (e.g., `<<<< 50~55`) to help disambiguate identical code blocks found in multiple places.
 * **Tail Context (Lookahead):** Supports a secondary `====` block to verify the code *following* the insertion point, ensuring patches are applied in exactly the correct location.
 * **Idempotency Checks:** Detects if a patch has already been applied and skips it gracefully instead of breaking the file.
+* **Near-Miss Diagnostics:** A failed match names the closest line in the file and classifies the difference (interior whitespace, capitalization, quote style), rather than reporting only that the block was not found.
+* **Structural Recovery:** A hunk with broken markers is reported and located instead of being discarded, and a following `--- a/path` header ends it, so one missing `>>>>` no longer swallows the hunk after it.
+* **Dry Run (`--check`):** Runs the whole matcher against the files on disk and reports what would happen, without creating backups or writing anything.
 
 ### ⚡ Full Lifecycle Management
 * **Multi-File Support:** Apply changes to multiple files in a single pass from a single response.

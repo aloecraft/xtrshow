@@ -95,6 +95,11 @@ i = builder.create_i() \
 ````
 
 
+**If a hunk fails:**
+- `[Unparseable: ...]` means the hunk's markers are wrong, not its content. Every hunk needs `<<<<`, then `====`, then `>>>>`. A hunk that runs out before `>>>>` is reported, not applied.
+- `[Block Not Found]` is followed by a `↳` line naming the closest line in the file. Read it: the usual cause is interior whitespace or capitalization, not missing code.
+- `N hunk(s) went missing` means the patch opened more hunks than could be read. Something above it is unterminated.
+
 Worked Example Notes:
 - quadruple backticks ARE part of the example, but are NOT part of the patch format. Their function is to ensure that patch renders properly to LLM response window
 - search blocks must be an exact match (careful for whitespace and comments)

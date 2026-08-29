@@ -87,6 +87,8 @@ LLMs are unreliable at producing valid unified diffs — line numbers drift, con
 * **Full lifecycle:** modify, insert, create files, delete sections, delete whole files (`! DELETE FILE`), replace a file wholesale (`! DELETE FILE` + a create block).
 * **Idempotent:** re-applying a patch detects already-applied hunks and skips them.
 * **Error reports:** failed applies generate a `.rpterr` bundle (original + patch + log) you can paste straight back to the LLM.
+* **Named failures:** a hunk that fails to match reports the closest line it found and how it differs; a hunk with broken markers is reported and located instead of silently vanishing.
+* **Dry run:** `--check` reports exactly what a patch would do without touching a file, and exits nonzero if anything would fail.
 * **Undo button:** `--revert` restores the most recent backup — per file, or for every file in a patch.
 
 ## License

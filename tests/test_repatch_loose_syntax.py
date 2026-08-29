@@ -94,12 +94,12 @@ new
 """
     changes = parse_multi_file_patch(patch_content)
 
-    # The parser logic consumes lines looking for '>>>>'.
-    # If it hits EOF without finding '>>>>', the block is usually discarded
-    # or treated as incomplete depending on implementation details.
-    # In current implementation, if it doesn't find '>>>>', the block isn't added to `changes`.
-
-    assert target.name not in changes or len(changes[target.name]) == 0
+    # '>>' does not close a hunk, so nothing here is applicable. The block is
+    # now kept as malformed rather than silently discarded: a hunk that
+    # vanishes without a trace is invisible to whatever wrote the patch.
+    hunks = changes.get(target.name, [])
+    assert all(h.get("malformed") for h in hunks)
+    assert not any(h["search"] or h["replace"] for h in hunks)
 
 
 # Copyright Michael Godfrey 2026 | aloecraft.org <michael@aloecraft.org>
