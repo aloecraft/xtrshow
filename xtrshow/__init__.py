@@ -6,7 +6,7 @@ import shutil
 from importlib.metadata import version as _pkg_version, PackageNotFoundError
 from pathlib import Path
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 # Every artifact either tool writes lives under one project-local directory.
 # Before 1.3 these were three separate entries in the project root.
