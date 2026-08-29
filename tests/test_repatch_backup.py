@@ -7,7 +7,7 @@ from xtrshow.repatch import apply_changes, create_backup
 
 
 def test_backup_creation(tmp_path):
-    """Test that applying changes creates a valid backup file in .xtrpatch/"""
+    """Test that applying changes creates a valid backup file in .xtr/backup/"""
 
     # Setup: Create a fake project structure
     # /tmp/proj/src/main.py
@@ -42,12 +42,12 @@ def test_backup_creation(tmp_path):
     assert "print('patched')" in target_file.read_text()
 
     # 2. Verify backup directory exists
-    backup_dir = project_dir / ".xtrpatch"
+    backup_dir = project_dir / ".xtr" / "backup"
     assert backup_dir.exists()
     assert backup_dir.is_dir()
 
     # 3. Verify backup file exists at correct subpath
-    # .xtrpatch/src/main.py.orig
+    # .xtr/backup/src/main.py.orig
     backup_file = backup_dir / "src" / "main.py.orig"
     assert backup_file.exists()
 
@@ -73,7 +73,7 @@ def test_backup_nested_structure(tmp_path):
 
     apply_changes(changes)
 
-    backup_file = project_dir / ".xtrpatch" / "a" / "b" / "c" / "script.py.orig"
+    backup_file = project_dir / ".xtr" / "backup" / "a" / "b" / "c" / "script.py.orig"
     assert backup_file.exists()
     assert backup_file.read_text() == "old_content"
 

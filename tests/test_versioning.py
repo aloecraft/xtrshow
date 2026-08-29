@@ -34,13 +34,13 @@ def test_versioned_backups_and_archives(tmp_path):
     assert target_file.read_text() == "v1 content\n"
 
     # Check Backup v0
-    backup_v0 = project_dir / ".xtrpatch" / "script.py.orig"
+    backup_v0 = project_dir / ".xtr" / "backup" / "script.py.orig"
     assert backup_v0.exists()
     assert backup_v0.read_text() == "v0 content\n"
 
     # Check Patch Archive v0
     # NEW BEHAVIOR: Named after TARGET file (script.py.patch), not source patch file
-    archive_v0 = project_dir / ".xtrpatch" / "script.py.patch"
+    archive_v0 = project_dir / ".xtr" / "backup" / "script.py.patch"
     assert archive_v0.exists()
     assert archive_v0.read_text() == patch_1.read_text()
 
@@ -62,13 +62,13 @@ def test_versioned_backups_and_archives(tmp_path):
     assert target_file.read_text() == "v2 content\n"
 
     # Check Backup v1
-    backup_v1 = project_dir / ".xtrpatch" / "script.py.1.orig"
+    backup_v1 = project_dir / ".xtr" / "backup" / "script.py.1.orig"
     assert backup_v1.exists()
     assert backup_v1.read_text() == "v1 content\n"
 
     # Check Patch Archive v1
     # NEW BEHAVIOR: Named script.py.1.patch
-    archive_v1 = project_dir / ".xtrpatch" / "script.py.1.patch"
+    archive_v1 = project_dir / ".xtr" / "backup" / "script.py.1.patch"
     assert archive_v1.exists()
     assert archive_v1.read_text() == patch_2.read_text()
 

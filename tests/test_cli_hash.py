@@ -79,7 +79,7 @@ def test_hash_covers_raw_bytes_not_normalized_content(tmp_path, monkeypatch, cap
 
 
 def test_hash_matches_xtrpatch_checksum(tmp_path):
-    """The exported digest is the same value xtrpatch records in .xtrpatch/."""
+    """The exported digest is the same value xtrpatch records in .xtr/backup/."""
     f1 = tmp_path / "app.py"
     f1.write_text("shared value\n")
 
@@ -138,7 +138,7 @@ def test_hash_present_in_multi_export(tmp_path, monkeypatch, capsys):
 
     run_export(tmp_path, monkeypatch, capsys, f1, ["--multi"])
 
-    out_files = list((tmp_path / ".xtrshow").iterdir())
+    out_files = list((tmp_path / ".xtr" / "multi").iterdir())
     assert SHA256_RE.search(out_files[0].read_text())
 
 

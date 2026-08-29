@@ -51,7 +51,7 @@ let booting = null;
 let pkgVersion = "1.0.1";
 let current = "basic";
 let busy = false;
-// Seeding wipes .xtrpatch/, so it happens once per scenario — not per apply,
+// Seeding wipes .xtr/, so it happens once per scenario — not per apply,
 // or revert would never have a backup to restore from.
 const seeded = new Set();
 
@@ -413,7 +413,7 @@ el.tree.addEventListener("click", () =>
   command("tree .", () => JSON.parse(driver.tree(current)))
 );
 el.ls.addEventListener("click", () =>
-  command("ls .xtrpatch/", () => JSON.parse(driver.ls_backups(current)))
+  command("ls .xtr/backup/", () => JSON.parse(driver.ls_backups(current)))
 );
 
 el.reset.addEventListener("click", async () => {

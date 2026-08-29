@@ -49,8 +49,8 @@ def test_backup_creates_sha256(tmp_path):
     }
     apply_changes(changes)
 
-    backup = project_dir / ".xtrpatch" / "app.py.orig"
-    checksum_file = project_dir / ".xtrpatch" / "app.py.orig.sha256"
+    backup = project_dir / ".xtr" / "backup" / "app.py.orig"
+    checksum_file = project_dir / ".xtr" / "backup" / "app.py.orig.sha256"
     assert backup.exists()
     assert checksum_file.exists()
     assert checksum_file.read_text().strip() == _compute_checksum(backup)

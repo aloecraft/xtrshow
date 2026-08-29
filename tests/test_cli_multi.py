@@ -28,7 +28,7 @@ def test_multi_default_directory(tmp_path, monkeypatch):
         main()
 
     # 4. Verify Output
-    output_dir = tmp_path / ".xtrshow"
+    output_dir = tmp_path / ".xtr" / "multi"
     assert output_dir.exists()
     assert output_dir.is_dir()
 
@@ -58,7 +58,7 @@ def test_multi_custom_directory(tmp_path, monkeypatch):
 
     assert (tmp_path / custom_dir).exists()
     # Check that .xtrshow was NOT created
-    assert not (tmp_path / ".xtrshow").exists()
+    assert not (tmp_path / ".xtr" / "multi").exists()
 
     # Verify file is inside
     files = list((tmp_path / custom_dir).iterdir())

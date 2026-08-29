@@ -40,10 +40,10 @@ def reset(scenario, files_json):
 
 
 def _tree(wd):
-    """Render the .xtrpatch backup tree, so the safety net is visible."""
-    xp = wd / ".xtrpatch"
+    """Render the .xtr/backup tree, so the safety net is visible."""
+    xp = wd / ".xtr" / "backup"
     if not xp.exists():
-        return "(no backups yet — .xtrpatch/ is created on first apply)"
+        return "(no backups yet — .xtr/backup/ is created on first apply)"
     rows = []
     for p in sorted(xp.rglob("*")):
         if p.is_file():
@@ -57,7 +57,7 @@ def _snapshot(wd):
     """Current on-disk state of every non-backup file in the workdir."""
     out = {}
     for p in sorted(wd.rglob("*")):
-        if p.is_file() and ".xtrpatch" not in p.parts:
+        if p.is_file() and ".xtr" not in p.parts:
             try:
                 out[str(p.relative_to(wd))] = p.read_text()
             except UnicodeDecodeError:
@@ -150,13 +150,13 @@ def revert(scenario, patch_text):
 
 
 def tree(scenario):
-    """Approximate `tree .` over the working directory, minus .xtrpatch/."""
+    """Approximate `tree .` over the working directory, minus .xtr/."""
     wd = _workdir(scenario)
     if not wd.exists():
         return json.dumps({"report": "(nothing here yet)"})
 
     entries = sorted(
-        p for p in wd.iterdir() if p.name != ".xtrpatch"
+        p for p in wd.iterdir() if p.name != ".xtr"
     )
     lines = ["."]
     for i, p in enumerate(entries):
@@ -170,12 +170,12 @@ def tree(scenario):
 
 
 def ls_backups(scenario):
-    """`ls .xtrpatch/` — the safety net, made visible."""
+    """`ls .xtr/backup/` — the safety net, made visible."""
     wd = _workdir(scenario)
-    xp = wd / ".xtrpatch"
+    xp = wd / ".xtr" / "backup"
     if not xp.exists():
         return json.dumps(
-            {"report": "ls: cannot access '.xtrpatch/': No such file or directory"}
+            {"report": "ls: cannot access '.xtr/backup/': No such file or directory"}
         )
     names = sorted(p.name for p in xp.iterdir())
     return json.dumps({"report": "  ".join(names) if names else ""})

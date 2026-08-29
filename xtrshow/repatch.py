@@ -9,9 +9,14 @@ import os
 import shutil
 from pathlib import Path
 
-from xtrshow import get_version
+from xtrshow import (
+    XTR_DIRNAME,
+    backup_root as default_backup_root,
+    get_version,
+    migrate_legacy_state,
+)
 
-# Subdirectory of .xtrpatch/ that mirrors targets living outside the cwd.
+# Subdirectory of .xtr/backup/ that mirrors targets living outside the cwd.
 ABS_BACKUP_PREFIX = "_abs"
 
 
@@ -383,7 +388,7 @@ def _save_checksum(backup_path):
 
 def _backup_rel_path(filepath):
     """
-    Path of a target file *within* the .xtrpatch tree.
+    Path of a target file *within* the backup tree.
 
     Files under the cwd mirror their relative path. Files outside it used to
     collapse to their bare basename, so two 'operations.py' from different
@@ -407,10 +412,10 @@ def _backup_rel_path(filepath):
 
 
 def _backup_location(filepath, backup_root=None):
-    """Returns (directory inside .xtrpatch, filename) for a target file."""
+    """Returns (directory inside .xtr/backup, filename) for a target file."""
     rel_path = _backup_rel_path(filepath)
     if backup_root is None:
-        backup_root = Path.cwd() / ".xtrpatch"
+        backup_root = default_backup_root()
     return backup_root / rel_path.parent, rel_path.name
 
 
@@ -476,8 +481,7 @@ def create_backup(filepath):
     """Creates a versioned backup of the file."""
     try:
         src = Path(filepath).resolve()
-        backup_root = Path.cwd() / ".xtrpatch"
-        dest, version = get_backup_path(src, backup_root)
+        dest, version = get_backup_path(src, default_backup_root())
         shutil.copy2(src, dest)
         _save_checksum(dest)
         return dest, version
@@ -488,7 +492,7 @@ def create_backup(filepath):
 
 def archive_patch_file(patch_source_path, target_filepath, version_index):
     """
-    Copies the patch file to .xtrpatch/.../target_file.version.patch
+    Copies the patch file to .xtr/backup/.../target_file.version.patch
     This stores the patch alongside the backup of the file it modified.
     """
     if not patch_source_path:
@@ -669,7 +673,7 @@ def _apply_file_creation(filepath, blocks, patch_source_path, output_fn, log_buf
         new_content = "".join([l + "\n" for l in blocks[0]["replace"]])
         new_len = len(blocks[0]["replace"])
 
-        backup_path, version = get_backup_path(Path(filepath), Path.cwd() / ".xtrpatch")
+        backup_path, version = get_backup_path(Path(filepath), default_backup_root())
         backup_path.parent.mkdir(parents=True, exist_ok=True)
         backup_path.touch()
 
@@ -715,7 +719,7 @@ def _apply_file_rewrite(filepath, blocks, patch_source_path, output_fn, log_buff
             # Nothing to delete, so this degrades to a plain creation. Still
             # reserve the empty backup slot so --revert has a rung to land on.
             backup_path, version = get_backup_path(
-                Path(filepath), Path.cwd() / ".xtrpatch"
+                Path(filepath), default_backup_root()
             )
             backup_path.parent.mkdir(parents=True, exist_ok=True)
             backup_path.touch()
@@ -1010,6 +1014,9 @@ def main():
     if not args.args:
         parser.print_help()
         sys.exit(1)
+
+    for src_path, dest_path in migrate_legacy_state():
+        print(f"  ↪ Moved {src_path.name} into {XTR_DIRNAME}/{dest_path.name}")
 
     if args.revert:
         target_candidate = args.args[0]

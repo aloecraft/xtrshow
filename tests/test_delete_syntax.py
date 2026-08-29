@@ -22,7 +22,7 @@ def test_delete_file_shorthand(tmp_path):
     apply_changes(changes)
 
     assert not target.exists()
-    assert (project_dir / ".xtrpatch" / "old.py.orig").exists()
+    assert (project_dir / ".xtr" / "backup" / "old.py.orig").exists()
 
 
 def test_delete_file_shorthand_case_variants(tmp_path):
@@ -109,7 +109,7 @@ def test_delete_file_shorthand_produces_backup(tmp_path):
     apply_changes(changes)
 
     assert not target.exists()
-    backup = project_dir / ".xtrpatch" / "revertme.py.orig"
+    backup = project_dir / ".xtr" / "backup" / "revertme.py.orig"
     assert backup.exists()
     assert backup.read_text() == original
 
