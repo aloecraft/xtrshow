@@ -6,7 +6,6 @@ build/
 .coverage
 .nogit
 
-.xtrpatch*
-.xtrshow*
+.xtr*
 *.patch
 x.md

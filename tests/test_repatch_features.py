@@ -96,13 +96,13 @@ def test_atomic_versioning_and_archiving(tmp_path):
     assert target_file.read_text() == "v1\n"
 
     # Check Backup v0
-    backup_v0 = project_dir / ".xtrpatch" / "app.py.orig"
+    backup_v0 = project_dir / ".xtr" / "backup" / "app.py.orig"
     assert backup_v0.exists()
     assert backup_v0.read_text() == "v0\n"
 
     # Check Patch Archive v0
     # NEW: Stored as app.py.patch (next to app.py.orig), NOT change_a.patch
-    archive_v0 = project_dir / ".xtrpatch" / "app.py.patch"
+    archive_v0 = project_dir / ".xtr" / "backup" / "app.py.patch"
     assert archive_v0.exists()
     assert archive_v0.read_text() == patch_1.read_text()
 
@@ -119,13 +119,13 @@ def test_atomic_versioning_and_archiving(tmp_path):
     assert target_file.read_text() == "v2\n"
 
     # Check Backup v1
-    backup_v1 = project_dir / ".xtrpatch" / "app.py.1.orig"
+    backup_v1 = project_dir / ".xtr" / "backup" / "app.py.1.orig"
     assert backup_v1.exists()
     assert backup_v1.read_text() == "v1\n"
 
     # Check Patch Archive v1
     # NEW: Stored as app.py.1.patch
-    archive_v1 = project_dir / ".xtrpatch" / "app.py.1.patch"
+    archive_v1 = project_dir / ".xtr" / "backup" / "app.py.1.patch"
     assert archive_v1.exists()
     assert archive_v1.read_text() == patch_2.read_text()
 

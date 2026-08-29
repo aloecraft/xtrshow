@@ -81,7 +81,7 @@ LLMs are unreliable at producing valid unified diffs — line numbers drift, con
 
 ### `xtrpatch` (The Patcher)
 
-* **Safety first:** automatic, versioned backups in `.xtrpatch/` before every modification.
+* **Safety first:** automatic, versioned backups in `.xtr/backup/` before every modification.
 * **Checksum verification:** warns when a file was edited outside the patch loop since the last apply.
 * **Conflict detection:** overlapping hunks are caught pre-flight and skipped, never blindly stacked.
 * **Full lifecycle:** modify, insert, create files, delete sections, delete whole files (`! DELETE FILE`), replace a file wholesale (`! DELETE FILE` + a create block).

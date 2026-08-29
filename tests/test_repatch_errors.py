@@ -23,7 +23,7 @@ def test_revert_functionality(tmp_path):
     apply_changes(changes)
 
     assert target.read_text() == "ver=2\n"
-    assert (project_dir / ".xtrpatch" / "config.py.orig").exists()
+    assert (project_dir / ".xtr" / "backup" / "config.py.orig").exists()
 
     # Apply Patch (v2 -> v3)
     patch_content_2 = f"--- a/config.py\n<<<<\nver=2\n====\nver=3\n>>>>"
@@ -31,7 +31,7 @@ def test_revert_functionality(tmp_path):
     apply_changes(changes_2)
 
     assert target.read_text() == "ver=3\n"
-    assert (project_dir / ".xtrpatch" / "config.py.1.orig").exists()
+    assert (project_dir / ".xtr" / "backup" / "config.py.1.orig").exists()
 
     # --- ACTION: Revert ---
     revert_file("config.py")

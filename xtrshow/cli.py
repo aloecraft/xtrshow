@@ -24,6 +24,8 @@ options:
   --no-meta             Omit the per-file '# meta:' line (size, line count,
                         modified/created dates, sha256)
   --no-hash             Omit only the sha256 digest from the '# meta:' line
+
+State (manifest, backups, --multi output) lives under .xtr/ in the project root.
 ---
 
 Copyright [2026] [michael@aloecraft.org]
@@ -54,7 +56,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-from xtrshow import get_version
+from xtrshow import XTR_DIRNAME, get_version, manifest_path, migrate_legacy_state
 
 
 # Default ignore patterns
@@ -156,7 +158,7 @@ def compute_sha256(path):
 
     Deliberately hashes what is on disk rather than the CRLF-normalized,
     line-numbered text in the export block, so the digest matches both
-    `sha256sum <file>` and the checksums xtrpatch records under .xtrpatch/.
+    `sha256sum <file>` and the checksums xtrpatch records under .xtr/backup/.
     """
     digest = hashlib.sha256()
     try:
@@ -490,16 +492,16 @@ def main():
     parser.add_argument(
         "--multi",
         nargs="?",
-        const=".xtrshow",
+        const=str(Path(XTR_DIRNAME) / "multi"),
         default=None,
         metavar="DIR",
-        help="Output individual files to directory (default: .xtrshow)",
+        help="Output individual files to directory (default: .xtr/multi)",
     )
     parser.add_argument(
         "--update",
         "-u",
         action="store_true",
-        help="Re-export previously selected files from .xtrshow_manifest without launching TUI",
+        help="Re-export previously selected files from .xtr/manifest without launching TUI",
     )
     parser.add_argument(
         "--prompt",
@@ -529,6 +531,10 @@ def main():
             sys.exit(1)
         return
 
+    for src_path, dest_path in migrate_legacy_state():
+        rel = Path(XTR_DIRNAME) / dest_path.name
+        print(f"Moved {src_path.name} into {rel}", file=sys.stderr)
+
     if args.outfile:
         directory = os.path.dirname(args.outfile) or "."
         if not os.access(directory, os.W_OK):
@@ -553,20 +559,20 @@ def main():
         print(f"Error: Could not read directory '{args.directory}'", file=sys.stderr)
         sys.exit(1)
 
-    MANIFEST_PATH = Path(".xtrshow_manifest")
+    MANIFEST_PATH = manifest_path()
 
     # Run the TUI (or load manifest for --update)
     try:
         if args.update:
             if not MANIFEST_PATH.exists():
                 print(
-                    "Error: No .xtrshow_manifest found. Run xtrshow normally first to create one.",
+                    "Error: No .xtr/manifest found. Run xtrshow normally first to create one.",
                     file=sys.stderr,
                 )
                 sys.exit(1)
             result = [l for l in MANIFEST_PATH.read_text().splitlines() if l.strip()]
             if not result:
-                print("Error: .xtrshow_manifest is empty.", file=sys.stderr)
+                print("Error: .xtr/manifest is empty.", file=sys.stderr)
                 sys.exit(1)
             print(f"Updating {len(result)} file(s) from manifest...", file=sys.stderr)
         else:
@@ -575,6 +581,7 @@ def main():
         if result is not None:
             # Save manifest after a fresh TUI selection
             if not args.update:
+                MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
                 MANIFEST_PATH.write_text("\n".join(result) + "\n")
 
             output = []

@@ -104,11 +104,11 @@ def test_out_of_tree_backup_mirrors_absolute_path(tmp_path):
     mirrored = Path(ABS_BACKUP_PREFIX).joinpath(
         *[p for p in resolved.parts if p.strip("/\\")]
     )
-    backup = project_dir / ".xtrpatch" / (str(mirrored) + ".orig")
+    backup = project_dir / ".xtr" / "backup" / (str(mirrored) + ".orig")
 
     assert backup.exists()
     assert backup.read_text() == "old\n"
-    assert not (project_dir / ".xtrpatch" / "mod.py.orig").exists()
+    assert not (project_dir / ".xtr" / "backup" / "mod.py.orig").exists()
 
 
 def test_revert_does_not_cross_same_basename_targets(tmp_path):
@@ -209,10 +209,10 @@ def test_created_file_backup_sits_with_its_metadata(tmp_path):
 
     apply_changes({"sub/dir/new.py": [{"hint": None, "search": [], "replace": ["print(1)"]}]})
 
-    backup_dir = project_dir / ".xtrpatch" / "sub" / "dir"
+    backup_dir = project_dir / ".xtr" / "backup" / "sub" / "dir"
     assert (backup_dir / "new.py.orig").exists()
     assert (backup_dir / "new.py.last.sha256").exists()
-    assert not (project_dir / ".xtrpatch" / "new.py.orig").exists()
+    assert not (project_dir / ".xtr" / "backup" / "new.py.orig").exists()
 
 
 def test_out_of_tree_creation_is_namespaced(tmp_path):
@@ -227,8 +227,8 @@ def test_out_of_tree_creation_is_namespaced(tmp_path):
     apply_changes({str(target): [{"hint": None, "search": [], "replace": ["print(1)"]}]})
 
     assert target.read_text() == "print(1)\n"
-    assert not (project_dir / ".xtrpatch" / "created.py.orig").exists()
-    assert list((project_dir / ".xtrpatch" / ABS_BACKUP_PREFIX).rglob("created.py.orig"))
+    assert not (project_dir / ".xtr" / "backup" / "created.py.orig").exists()
+    assert list((project_dir / ".xtr" / "backup" / ABS_BACKUP_PREFIX).rglob("created.py.orig"))
 
 
 # Copyright Michael Godfrey 2026 | aloecraft.org <michael@aloecraft.org>

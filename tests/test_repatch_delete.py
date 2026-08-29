@@ -36,7 +36,7 @@ def test_delete_existing_file(tmp_path):
     assert not target_file.exists()
 
     # Backup should exist
-    backup = project_dir / ".xtrpatch" / "deprecated.py.orig"
+    backup = project_dir / ".xtr" / "backup" / "deprecated.py.orig"
     assert backup.exists()
     assert backup.read_text() == original_content
 
@@ -104,7 +104,7 @@ v2
 
     # del.py should be deleted
     assert not file_del.exists()
-    assert (project_dir / ".xtrpatch" / "del.py.orig").exists()
+    assert (project_dir / ".xtr" / "backup" / "del.py.orig").exists()
 
 
 # Copyright Michael Godfrey 2026 | aloecraft.org <michael@aloecraft.org>

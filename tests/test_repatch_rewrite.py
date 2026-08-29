@@ -42,7 +42,7 @@ def test_delete_then_create_rewrites_file(tmp_path):
 
 
 def test_rewrite_backs_up_the_original(tmp_path):
-    """The replaced content is recoverable from .xtrpatch."""
+    """The replaced content is recoverable from .xtr/backup."""
     project_dir = tmp_path / "proj"
     project_dir.mkdir()
     os.chdir(project_dir)
@@ -53,7 +53,7 @@ def test_rewrite_backs_up_the_original(tmp_path):
     changes = parse_multi_file_patch(_rewrite_patch("app.py"))
     apply_changes(changes)
 
-    backup = project_dir / ".xtrpatch" / "app.py.orig"
+    backup = project_dir / ".xtr" / "backup" / "app.py.orig"
     assert backup.exists()
     assert backup.read_text() == ALPINE
 

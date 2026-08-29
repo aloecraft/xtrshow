@@ -28,7 +28,7 @@
 **xtrpatch** is a robust patching tool designed specifically to handle the unpredictability of LLM-generated code.
 
 ### 🛡️ Safety & Versioning
-* **Atomic Backups:** Every modification triggers a backup to a dedicated `.xtrpatch/` directory.
+* **Atomic Backups:** Every modification triggers a backup under the project's `.xtr/backup/` directory.
 * **Versioning History:** Backups are versioned (e.g., `file.py.orig`, `file.py.1.orig`, `file.py.2.orig`), allowing you to step back through multiple changes.
 * **Patch Archival:** The patch file used to create a change is archived alongside the backup (`file.py.1.patch`), linking the *cause* (the patch) to the *effect* (the backup).
 * **Revert Capability:** Built-in `--revert` command to restore files to their previous state instantly.

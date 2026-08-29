@@ -60,7 +60,7 @@ Each exported file block includes a `# meta:` line under its header with the fil
 
 This gives the LLM a sense of which files are freshest without costing more than a line of context. Pass `--no-meta` to omit it. The line starts with `#`, so it's inert if it ever ends up inside a patch file.
 
-The digest is over the file's **raw bytes on disk**, not the line-numbered, newline-normalized text inside the fence. That means it matches `sha256sum src/main.py` and the checksums `xtrpatch` records under `.xtrpatch/`, so you can verify a paste by hand:
+The digest is over the file's **raw bytes on disk**, not the line-numbered, newline-normalized text inside the fence. That means it matches `sha256sum src/main.py` and the checksums `xtrpatch` records under `.xtr/backup/`, so you can verify a paste by hand:
 
 ```bash
 sha256sum src/main.py    # compare against the digest in the meta line
@@ -70,7 +70,7 @@ Its main job is identity, not integrity: re-export the same files after a round 
 
 ### Re-Exporting (`--update`)
 
-Every export saves your selection to `.xtrshow_manifest`. When you've changed code and want to send the same files back to the LLM, skip the TUI:
+Every export saves your selection to `.xtr/manifest`. When you've changed code and want to send the same files back to the LLM, skip the TUI:
 
 ```bash
 xtrshow --update > context.md
@@ -136,11 +136,15 @@ On any failure, an **error report** (`.rpterr`) is written next to the backup, b
 
 `xtrpatch` never modifies a file without backing it up first.
 
-* **Backups:** `.xtrpatch/<relative_path>/<filename>.orig`, then `.1.orig`, `.2.orig`, … on subsequent patches.
+* **Backups:** `.xtr/backup/<relative_path>/<filename>.orig`, then `.1.orig`, `.2.orig`, … on subsequent patches.
 * **Patch archive:** the applied patch is stored alongside each backup (`<filename>.patch`).
 * **External-edit detection:** a checksum of the post-patch state is recorded; if the file changes outside the patch loop, the next apply warns you.
 
-Add `.xtrpatch/`, `.xtrshow/`, and `.xtrshow_manifest` to your `.gitignore`.
+Add `.xtr/` to your `.gitignore` — it holds the manifest, backups, and `--multi` output.
+
+Upgrading from 1.2 or earlier? The first run of either command folds the old
+`.xtrpatch/`, `.xtrshow_manifest`, and `.xtrshow/` into `.xtr/` and says so. Your
+revert history moves with it. An existing `.xtr/` is never overwritten.
 
 ### Reverting Changes
 

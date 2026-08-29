@@ -69,7 +69,7 @@ def test_meta_line_in_multi_export(tmp_path, monkeypatch, capsys):
 
     run_export(tmp_path, monkeypatch, capsys, f1, ["--multi"])
 
-    out_files = list((tmp_path / ".xtrshow").iterdir())
+    out_files = list((tmp_path / ".xtr" / "multi").iterdir())
     assert len(out_files) == 1
     assert "# meta: " in out_files[0].read_text()
 
