@@ -2,11 +2,29 @@ name: Publish to PyPI
 
 on:
   push:
+    # A -dev. tag must never reach PyPI. "v1.4.0-dev.7" is a valid PEP 440
+    # version and uploads as 1.4.0.dev7 without complaint, and PyPI uploads
+    # are immutable: a version can be yanked, never replaced or reused. The
+    # GitHub side of a dev build can be pruned; this side cannot.
+    #
+    # The exclusion is a negated pattern, not a tags-ignore list. Actions
+    # rejects a workflow that sets both tags and tags-ignore on the same
+    # event, and a workflow that fails to parse does not run at all, so the
+    # tags-ignore spelling would silently stop publishing rather than narrow
+    # it. See doc/ALIGNMENT.md, section 7.
     tags:
       - "v*"
+      - "!v*-dev.*"
 
 jobs:
+  # A tag must not publish anything if the suite is red. Tests running on
+  # the same push is not a gate: a separate workflow triggered by that push
+  # races the publish and does not block it. See doc/ALIGNMENT.md, section 9.
+  test:
+    uses: ./.github/workflows/test.yml
+
   build:
+    needs: test
     runs-on: ubuntu-latest
 
     steps:
