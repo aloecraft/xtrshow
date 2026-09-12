@@ -5,6 +5,31 @@
     "patch": 0,
     "pre": null
   },
+  "TECHNO_CHANGELOG": {
+    "project": "xtrshow",
+    "tag_rule": "exact",
+    "emit_json": false,
+    "latest_requires": [
+      "stable"
+    ],
+    "stamps": [
+      {
+        "file": "pyproject.toml",
+        "find": "^version\\s*=\\s*\"([^\"]+)\"",
+        "spelling": "pep440"
+      },
+      {
+        "file": "xtrshow/__init__.py",
+        "find": "^__version__\\s*=\\s*\"([^\"]+)\"",
+        "spelling": "pep440"
+      },
+      {
+        "file": "web/vendor/VERSION",
+        "find": "^(\\S+)$",
+        "spelling": "pep440"
+      }
+    ]
+  },
   "TECHNO_INIT_DIRS": [
     ".nogit",
     ".dump",
