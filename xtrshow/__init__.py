@@ -6,7 +6,6 @@ import shutil
 from importlib.metadata import version as _pkg_version, PackageNotFoundError
 from pathlib import Path
 
-__version__ = "1.3.0"
 
 # Every artifact either tool writes lives under one project-local directory.
 # Before 1.3 these were three separate entries in the project root.
@@ -33,6 +32,15 @@ def get_version():
         return _pkg_version("xtrshow")
     except PackageNotFoundError:
         return "unknown (not installed)"
+
+
+# Derived rather than typed. This was the fourth place the version was
+# written by hand and the only one nothing read, so it could only ever drift.
+# Resolved at import rather than through a PEP 562 module __getattr__, so it
+# stays an ordinary module attribute and vars(xtrshow)["__version__"] keeps
+# working. Reading from a source tree that was never installed gives the
+# placeholder, which is the honest answer: there is no version until then.
+__version__ = get_version()
 
 
 def xtr_root(base=None):

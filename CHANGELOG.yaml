@@ -1,0 +1,166 @@
+schema: 1
+repo: Aloecraft-org/xtrshow
+
+# Backfilled from v0.3.0, the first release whose tag and PyPI upload
+# correspond. Everything earlier predates the publish workflow and does not
+# line up: 0.1.0 and 0.2.0 are on PyPI with no tag behind them, and v0.2.2 is
+# tagged with no upload. Inventing entries for those would mean inventing the
+# tags too, so this file starts where the record is real.
+#
+# Entries describe the published package. The site under web/ is staged for
+# extraction and is not part of the distribution, so its changes are not here.
+
+releases:
+  - version: "1.3.0"
+    tag: v1.3.0
+    date: "2026-08-29"
+    status: released
+    stable: true
+    latest: true
+    mirror: false
+    summary: |
+      All project state moves under one `.xtr/` directory. Both commands
+      migrate a pre-1.3 layout on their first run, so no user action is
+      required and this is a minor rather than a major.
+    changed:
+      - |
+        `.xtrshow_manifest` is now `.xtr/manifest`, `.xtrpatch/` is now
+        `.xtr/backup/`, and `.xtrshow/` is now `.xtr/multi/`. The backup
+        tree keeps its own subdirectory rather than sitting at the root, so
+        a project path named `manifest` or `multi` cannot collide with the
+        state files.
+      - |
+        `.gitignore` collapses to `.xtr*`, covering the new directory and
+        both legacy names.
+    added:
+      - |
+        Automatic migration on the first run of either command. Each entry
+        moves only when its `.xtr/` counterpart does not already exist, so
+        the migration is idempotent, resumable and cannot clobber existing
+        state. Backups move rather than being left behind: stranding them
+        under `.xtrpatch/` would silently break `--revert` for anyone with
+        history.
+
+  - version: "1.2.0"
+    tag: v1.2.0
+    date: "2026-08-28"
+    status: released
+    stable: true
+    mirror: false
+    summary: |
+      Exported file blocks carry a SHA-256 digest, so a model reading the
+      context can tell whether it has already seen a file rather than
+      re-reading it to find out.
+    added:
+      - |
+        A `sha256` field in each block's `# meta:` line. The digest covers
+        the file's raw bytes on disk rather than the newline-normalized and
+        line-numbered text inside the fence, so it equals both
+        `sha256sum <file>` and the checksums xtrpatch already records. A
+        failed digest read drops the field rather than the whole meta line.
+      - |
+        `--no-hash`, which keeps the meta line and omits just the digest.
+        `--no-meta` still omits the line entirely.
+    changed:
+      - |
+        The LLM prompt asset now describes the export format it reads, not
+        only the patch format it writes. The costly omission predates the
+        digest: content lines carry an `N:` line-number prefix and
+        `normalize()` strips only whitespace, so a search block that keeps
+        the prefix fails with "Block Not Found".
+
+  - version: "1.1.0"
+    tag: v1.1.0
+    date: "2026-08-25"
+    status: released
+    stable: true
+    mirror: false
+    summary: |
+      Per-file metadata in exports, and whole-file replacement by composing
+      the two primitives that already existed.
+    added:
+      - |
+        A `# meta:` line under each exported file header carrying size, line
+        count and modification date, plus creation date on platforms that
+        track it. Linux exposes only inode-change time, so it is omitted
+        there. The line starts with `#`, which xtrpatch's parser skips, so
+        exports stay round-trip safe. Disable with `--no-meta`.
+      - |
+        Whole-file replacement via `! DELETE FILE` followed by a create
+        block. Only delete-then-create is honoured: a lone create block
+        against an existing file stays an error, because that shape is also
+        what a hunk whose search text went missing looks like, and
+        truncating the file on that guess would throw work away.
+    fixed:
+      - Absolute paths are handled correctly by xtrpatch.
+      - |
+        Hunks carrying no search block no longer report "Block Not Found",
+        which described a search that never ran. They now report "Stray
+        Delete Directive" or "Cannot Create, File Exists".
+    changed:
+      - |
+        `get_version` moved to the package root so `repatch.py` no longer
+        imports `cli.py`, which imports curses at module scope. The patcher
+        now needs nothing beyond the standard library and runs on a
+        curses-less interpreter.
+
+  - version: "1.0.1"
+    tag: v1.0.1
+    date: "2026-07-25"
+    status: released
+    stable: true
+    mirror: false
+    summary: |
+      A version flag and shorter names for both commands.
+    added:
+      - "`-v` / `--version` on both xtrshow and xtrpatch."
+      - "`xtsh` and `xtpa`, short aliases for `xtrshow` and `xtrpatch`."
+
+  - version: "1.0.0"
+    tag: v1.0.0
+    date: "2026-07-09"
+    status: released
+    stable: true
+    mirror: false
+    summary: |
+      The first release declared stable.
+    fixed:
+      - Argparse stability fixes.
+      - Empty files are handled correctly rather than treated as missing.
+    changed:
+      - Checksum handling updated.
+      - An expanded README and getting-started guide.
+
+  - version: "0.3.1"
+    tag: v0.3.1
+    date: "2026-06-30"
+    status: released
+    stable: true
+    mirror: false
+    summary: |
+      The LLM prompt becomes printable, and the docs become generated.
+    added:
+      - "`-p` / `--prompt`, which prints the bundled LLM prompt to stdout."
+      - |
+        `script/pydocgen.py`, a documentation generator, driven by the
+        `docgen` make target.
+
+  - version: "0.3.0"
+    tag: v0.3.0
+    date: "2026-06-27"
+    status: released
+    stable: true
+    mirror: false
+    summary: |
+      Conflict detection, an update shortcut, and the first release
+      published by workflow rather than by hand.
+    added:
+      - Checksum and block conflict detection in xtrpatch.
+      - "`-u` / `--update`, a shortcut for re-exporting the last selection."
+      - Wildcard anchoring in the delete syntax.
+      - |
+        A GitHub Actions workflow that publishes to PyPI on a `v*` tag.
+        Every earlier upload was made by hand, which is why the tags and the
+        PyPI versions before this one do not correspond.
+    changed:
+      - "`apply_changes` refactored."

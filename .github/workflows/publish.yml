@@ -2,11 +2,64 @@ name: Publish to PyPI
 
 on:
   push:
+    # A -dev. tag must never reach PyPI. "v1.4.0-dev.7" is a valid PEP 440
+    # version and uploads as 1.4.0.dev7 without complaint, and PyPI uploads
+    # are immutable: a version can be yanked, never replaced or reused. The
+    # GitHub side of a dev build can be pruned; this side cannot.
+    #
+    # The exclusion is a negated pattern, not a tags-ignore list. Actions
+    # rejects a workflow that sets both tags and tags-ignore on the same
+    # event, and a workflow that fails to parse does not run at all, so the
+    # tags-ignore spelling would silently stop publishing rather than narrow
+    # it. See doc/ALIGNMENT.md, section 7.
     tags:
       - "v*"
+      - "!v*-dev.*"
 
 jobs:
+  # A tag must not publish anything if the suite is red. Tests running on
+  # the same push is not a gate: a separate workflow triggered by that push
+  # races the publish and does not block it. See doc/ALIGNMENT.md, section 9.
+  test:
+    uses: ./.github/workflows/test.yml
+
+  # The tag has to agree with the tree before anything is built. These are
+  # technoproj's own checks, pinned to the tag rather than tracking main: a
+  # release pipeline that follows a moving branch changes when nobody touched
+  # it. See doc/ALIGNMENT.md, section 9.
+  preflight:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install technoproj
+        run: pip install "git+https://github.com/Aloecraft-org/technoproj@v0.1.0"
+
+      - name: script/version.mk has not drifted from the shared copy
+        run: technoproj check
+
+      - name: CHANGELOG.md matches CHANGELOG.yaml
+        run: technoproj-changelog check
+
+      - name: The tree's version agrees with the newest changelog entry
+        run: technoproj-changelog consistency
+
+      # Refuses a tag with no changelog entry, or one still marked
+      # unreleased. Prints prerelease= and version= on success; nothing reads
+      # them yet, but a release-creating step would.
+      - name: The tag has a released changelog entry
+        env:
+          TAG: ${{ github.ref_name }}
+        run: technoproj-changelog release-check --tag "$TAG" --publish
+
   build:
+    needs: [test, preflight]
     runs-on: ubuntu-latest
 
     steps:
