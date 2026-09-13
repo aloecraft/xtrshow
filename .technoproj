@@ -19,11 +19,6 @@
         "spelling": "pep440"
       },
       {
-        "file": "xtrshow/__init__.py",
-        "find": "^__version__\\s*=\\s*\"([^\"]+)\"",
-        "spelling": "pep440"
-      },
-      {
         "file": "web/vendor/VERSION",
         "find": "^(\\S+)$",
         "spelling": "pep440"
